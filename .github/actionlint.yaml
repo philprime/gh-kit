@@ -1,0 +1,6 @@
+# GitHub-hosted images not yet recognized by Actionlint's built-in label list.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04
+    - ubuntu-26.04-arm
+    - windows-11-vs2026-arm
