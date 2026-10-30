@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 
+	"github.com/philprime/gh-kit/cmd/pr"
 	"github.com/philprime/gh-kit/cmd/workflows"
 	"github.com/spf13/cobra"
 )
@@ -20,6 +21,6 @@ func NewRootCommand() *cobra.Command {
 		},
 	}
 	command.CompletionOptions.DisableDefaultCmd = true
-	command.AddCommand(workflows.NewWorkflowsCmd())
+	command.AddCommand(workflows.NewWorkflowsCmd(), pr.NewPRCmd())
 	return command
 }
