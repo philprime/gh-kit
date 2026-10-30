@@ -29,6 +29,10 @@ func TestRunInvalidArguments(t *testing.T) {
 		{"workflows", "cancel-all", "--pr", "0"}, {"workflows", "cancel-all", "--pr", "-1"},
 		{"workflows", "cancel-all", "--pr", "abc"}, {"workflows", "cancel-all", "--pr", "42", "extra"},
 		{"workflows"}, {"workflows", "unknown"}, {"workflows", "cancel-all", "--unknown"},
+		{"pr"}, {"pr", "unknown"}, {"pr", "comments"},
+		{"pr", "comments", "--pr", "0"}, {"pr", "comments", "--pr", "-1"},
+		{"pr", "comments", "--pr", "abc"}, {"pr", "comments", "--pr", "42", "extra"},
+		{"pr", "comments", "--unknown"},
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			var out, stderr bytes.Buffer
@@ -39,6 +43,19 @@ func TestRunInvalidArguments(t *testing.T) {
 				t.Fatalf("errors must be returned, not printed: stdout=%q stderr=%q", &out, &stderr)
 			}
 		})
+	}
+}
+
+func TestPRCommentsHelp(t *testing.T) {
+	var out, stderr bytes.Buffer
+	if err := run(context.Background(), []string{"pr", "comments", "--help"}, &out, &stderr); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "gh kit pr comments") || !strings.Contains(out.String(), "--pr") {
+		t.Fatalf("unexpected help: %s", &out)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("unexpected stderr: %s", &stderr)
 	}
 }
 
