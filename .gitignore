@@ -67,7 +67,7 @@ agents.lock
 .agents/.gitignore
 
 # binaries
-gh-kit
+/gh-kit
 
 # temporary files
 tmp

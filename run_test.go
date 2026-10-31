@@ -62,6 +62,45 @@ func TestWorkflowLogsHelp(t *testing.T) {
 	}
 }
 
+func TestAgentSkillsCommands(t *testing.T) {
+	for _, args := range [][]string{
+		{"agent", "skills", "list"},
+		{"agent", "skills", "get", "gh-kit"},
+	} {
+		var out, stderr bytes.Buffer
+		if err := run(context.Background(), args, &out, &stderr); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(out.String(), "gh-kit") || stderr.Len() != 0 {
+			t.Fatalf("unexpected output: stdout=%q stderr=%q", &out, &stderr)
+		}
+	}
+}
+
+func TestAgentSkillsInvalidArguments(t *testing.T) {
+	for _, args := range [][]string{
+		{}, {"skills"}, {"skills", "list", "extra"}, {"skills", "get"},
+		{"skills", "get", "unknown"}, {"skills", "get", "gh-kit", "extra"},
+		{"skills", "install"}, {"skills", "install", "--all", "gh-kit"},
+		{"skills", "install", "gh-kit", "unknown"}, {"skills", "install", "../escape"},
+		{"skills", "install", "gh-kit", "--project", "--dir", ""},
+		{"skills", "install", "gh-kit", "--dir", " "},
+		{"skills", "uninstall"}, {"skills", "uninstall", "--all"},
+		{"skills", "uninstall", "gh-kit", "--force"},
+		{"skills", "uninstall", "gh-kit", "--project", "--dir", ".agents"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			var out, stderr bytes.Buffer
+			if err := run(context.Background(), append([]string{"agent"}, args...), &out, &stderr); err == nil {
+				t.Fatal("expected invalid command error")
+			}
+			if out.Len() != 0 || stderr.Len() != 0 {
+				t.Fatalf("errors must be returned, not printed: stdout=%q stderr=%q", &out, &stderr)
+			}
+		})
+	}
+}
+
 func TestPRCommentsHelp(t *testing.T) {
 	var out, stderr bytes.Buffer
 	if err := run(context.Background(), []string{"pr", "comments", "--help"}, &out, &stderr); err != nil {
