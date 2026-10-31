@@ -33,6 +33,9 @@ func TestRunInvalidArguments(t *testing.T) {
 		{"pr", "comments", "--pr", "0"}, {"pr", "comments", "--pr", "-1"},
 		{"pr", "comments", "--pr", "abc"}, {"pr", "comments", "--pr", "42", "extra"},
 		{"pr", "comments", "--unknown"},
+		{"workflows", "logs"}, {"workflows", "logs", "--job", "0"},
+		{"workflows", "logs", "--job", "-1"}, {"workflows", "logs", "--job", "abc"},
+		{"workflows", "logs", "--job", "124568269207", "extra"},
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			var out, stderr bytes.Buffer
@@ -43,6 +46,19 @@ func TestRunInvalidArguments(t *testing.T) {
 				t.Fatalf("errors must be returned, not printed: stdout=%q stderr=%q", &out, &stderr)
 			}
 		})
+	}
+}
+
+func TestWorkflowLogsHelp(t *testing.T) {
+	var out, stderr bytes.Buffer
+	if err := run(context.Background(), []string{"workflows", "logs", "--help"}, &out, &stderr); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "--job") {
+		t.Fatalf("missing job flag in help: %s", &out)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("unexpected stderr: %s", &stderr)
 	}
 }
 
