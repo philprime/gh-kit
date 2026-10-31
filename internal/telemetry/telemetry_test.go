@@ -203,6 +203,38 @@ func TestCommandPanic(t *testing.T) {
 	}
 }
 
+func TestSensitiveDataCollectionDisabled(t *testing.T) {
+	_, client, _ := testClient(t)
+	collection := client.GetDataCollection()
+	for _, tc := range []struct {
+		name   string
+		filter func(map[string]string) map[string]string
+	}{
+		{"request headers", collection.FilterRequestHeaders},
+		{"response headers", collection.FilterResponseHeaders},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.filter(map[string]string{"X-Repository": "private-value"}); len(got) != 0 {
+				t.Fatalf("headers collected: %v", got)
+			}
+		})
+	}
+	if collection.CollectQueryParams() || collection.FilterQueryString("repository=private-value") != "" {
+		t.Error("query parameters collected")
+	}
+	if collection.CollectCookies() {
+		t.Error("cookies collected")
+	}
+	for _, bodyType := range []sentry.BodyType{sentry.BodyIncomingRequest, sentry.BodyOutgoingRequest, sentry.BodyIncomingResponse} {
+		if collection.CollectHTTPBody(bodyType) {
+			t.Errorf("body collection enabled for %s", bodyType)
+		}
+	}
+	if collection.UserInfo.Value {
+		t.Error("automatic user information collected")
+	}
+}
+
 func TestPrivacyFilters(t *testing.T) {
 	ctx, client, transport := testClient(t)
 	hub := sentry.GetHubFromContext(ctx)

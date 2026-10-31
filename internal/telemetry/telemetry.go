@@ -101,13 +101,22 @@ func TraceRequest(ctx context.Context, method string, request func(context.Conte
 
 func options() sentry.ClientOptions {
 	return sentry.ClientOptions{
-		Dsn:                   dsn,
-		Release:               release(),
-		Environment:           "production",
-		EnableTracing:         true,
-		TracesSampleRate:      1,
-		AttachStacktrace:      true,
-		SendDefaultPII:        false,
+		Dsn:              dsn,
+		Release:          release(),
+		Environment:      "production",
+		EnableTracing:    true,
+		TracesSampleRate: 1,
+		AttachStacktrace: true,
+		DataCollection: &sentry.DataCollection{
+			UserInfo: sentry.Set(false),
+			Cookies:  &sentry.KeyValueCollectionBehavior{Mode: sentry.CollectionOff},
+			HTTPHeaders: &sentry.HeaderCollectionConfig{
+				Request:  &sentry.KeyValueCollectionBehavior{Mode: sentry.CollectionOff},
+				Response: &sentry.KeyValueCollectionBehavior{Mode: sentry.CollectionOff},
+			},
+			HTTPBodies:  []sentry.BodyType{},
+			QueryParams: &sentry.KeyValueCollectionBehavior{Mode: sentry.CollectionOff},
+		},
 		MaxBreadcrumbs:        10,
 		BeforeBreadcrumb:      sanitizeBreadcrumb,
 		BeforeSend:            sanitizeEvent,
