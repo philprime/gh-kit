@@ -1,13 +1,16 @@
 package workflows
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 
 	"github.com/cli/go-gh/v2/pkg/api"
 	"github.com/cli/go-gh/v2/pkg/repository"
+	"github.com/philprime/gh-kit/internal/telemetry"
 	"github.com/spf13/cobra"
 )
 
@@ -35,7 +38,7 @@ func newCancelAllCmd(deps dependencies) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("create GitHub client: %w", err)
 			}
-			return cancelAllWorkflows(client, repo.Owner+"/"+repo.Name, pr, command.OutOrStdout())
+			return cancelAllWorkflows(command.Context(), client, repo.Owner+"/"+repo.Name, pr, command.OutOrStdout())
 		},
 	}
 	command.Flags().IntVar(&pr, "pr", 0, "Pull request number in the current repository (required)")
@@ -54,7 +57,7 @@ type workflowRun struct {
 	} `json:"pull_requests"`
 }
 
-func cancelAllWorkflows(client *api.RESTClient, repo string, pr int, out io.Writer) error {
+func cancelAllWorkflows(ctx context.Context, client *api.RESTClient, repo string, pr int, out io.Writer) error {
 	base := "repos/" + repo
 	var pull struct {
 		Head struct {
@@ -64,7 +67,9 @@ func cancelAllWorkflows(client *api.RESTClient, repo string, pr int, out io.Writ
 			} `json:"repo"`
 		} `json:"head"`
 	}
-	if err := client.Get(fmt.Sprintf("%s/pulls/%d", base, pr), &pull); err != nil {
+	if err := telemetry.TraceRequest(ctx, http.MethodGet, func(ctx context.Context) error {
+		return client.DoWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/pulls/%d", base, pr), nil, &pull)
+	}); err != nil {
 		return fmt.Errorf("get PR #%d: %w", pr, err)
 	}
 	if pull.Head.Repo == nil {
@@ -80,7 +85,9 @@ func cancelAllWorkflows(client *api.RESTClient, repo string, pr int, out io.Writ
 			Runs       []workflowRun `json:"workflow_runs"`
 		}
 		path := fmt.Sprintf("%s/actions/runs?branch=%s&per_page=100&page=%d", base, url.QueryEscape(pull.Head.Ref), page)
-		if err := client.Get(path, &response); err != nil {
+		if err := telemetry.TraceRequest(ctx, http.MethodGet, func(ctx context.Context) error {
+			return client.DoWithContext(ctx, http.MethodGet, path, nil, &response)
+		}); err != nil {
 			return fmt.Errorf("list workflow runs: %w", err)
 		}
 		for _, run := range response.Runs {
@@ -116,7 +123,12 @@ func cancelAllWorkflows(client *api.RESTClient, repo string, pr int, out io.Writ
 	cancelled := 0
 	var failures []error
 	for _, run := range runs {
-		response, err := client.Request("POST", fmt.Sprintf("%s/actions/runs/%d/cancel", base, run.ID), nil)
+		var response *http.Response
+		err := telemetry.TraceRequest(ctx, http.MethodPost, func(ctx context.Context) error {
+			var err error
+			response, err = client.RequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/actions/runs/%d/cancel", base, run.ID), nil)
+			return err
+		})
 		if err != nil {
 			failures = append(failures, fmt.Errorf("cancel workflow run %d: %w", run.ID, err))
 			continue

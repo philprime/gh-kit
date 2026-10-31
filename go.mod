@@ -4,6 +4,7 @@ go 1.27.3
 
 require (
 	github.com/cli/go-gh/v2 v2.17.0
+	github.com/getsentry/sentry-go v0.50.0
 	github.com/spf13/cobra v1.10.2
 )
 
@@ -17,7 +18,7 @@ require (
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/henvic/httpretty v0.2.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/kr/pretty v0.3.1 // indirect
+	github.com/kr/text v0.2.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.1 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect

@@ -2,6 +2,7 @@ package pr
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +13,8 @@ import (
 	"github.com/cli/go-gh/v2/pkg/api"
 	"github.com/cli/go-gh/v2/pkg/repository"
 )
+
+type requestContextKey struct{}
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
@@ -25,6 +28,9 @@ func TestComments(t *testing.T) {
 				Host: "github.example.com", AuthToken: "test-token", LogIgnoreEnv: true,
 				Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 					requests++
+					if r.Context().Value(requestContextKey{}) != "command" {
+						t.Fatal("command context lost")
+					}
 					if r.Method != "GET" || r.URL.Path != "/api/v3/repos/owner/repo/pulls/42/comments" || r.URL.Query().Get("per_page") != "100" {
 						t.Fatalf("unexpected request: %s %s", r.Method, r.URL)
 					}
@@ -73,7 +79,7 @@ func TestComments(t *testing.T) {
 				command.SetOut(errorWriter{})
 			}
 			command.SetArgs([]string{"--pr", "42"})
-			err = command.Execute()
+			err = command.ExecuteContext(context.WithValue(context.Background(), requestContextKey{}, "command"))
 			if strings.Contains(scenario, "error") || scenario == "invalid json" {
 				if err == nil {
 					t.Fatal("expected error")

@@ -4,7 +4,7 @@
 
 ## Ground rules
 
-- Use the `justfile` as the entry point for development tasks. Do not run Go tools, formatters, or analyzers directly. If a recipe is missing, but will be used many times, adapt an existing one or add one before using it.
+- Prefer existing `justfile` recipes for development tasks. Run tools directly when no suitable recipe exists.
 - Run one shell command per invocation. Do not chain commands or wrap sequences in `bash -c`. A pipeline is allowed for a single data flow.
 - Run `git` from the project working directory. Use `git -C` only when targeting another repository.
 - Draft commit messages and PR descriptions in Markdown files under `tmp/`, then pass them with `git commit -F` or `gh pr create --body-file`.

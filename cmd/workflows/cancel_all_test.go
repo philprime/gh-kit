@@ -2,6 +2,7 @@ package workflows
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"reflect"
@@ -11,6 +12,8 @@ import (
 	"github.com/cli/go-gh/v2/pkg/api"
 	"github.com/cli/go-gh/v2/pkg/repository"
 )
+
+type requestContextKey struct{}
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
@@ -35,6 +38,9 @@ func TestCancelAllWorkflows(t *testing.T) {
 	// Catch missing pagination and cancellation of completed or unrelated runs.
 	var cancelled []string
 	client := testClient(t, func(r *http.Request) (int, string) {
+		if r.Context().Value(requestContextKey{}) != "command" {
+			t.Fatal("command context lost")
+		}
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/pulls/42":
 			return 200, `{"head":{"ref":"feature/topic","repo":{"id":7}}}`
@@ -76,7 +82,7 @@ func TestCancelAllWorkflows(t *testing.T) {
 	})
 	command.SetArgs([]string{"--pr", "42"})
 	command.SetOut(&out)
-	if err := command.Execute(); err != nil {
+	if err := command.ExecuteContext(context.WithValue(context.Background(), requestContextKey{}, "command")); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"/repos/owner/repo/actions/runs/1/cancel", "/repos/owner/repo/actions/runs/2/cancel", "/repos/owner/repo/actions/runs/6/cancel", "/repos/owner/repo/actions/runs/7/cancel"}
@@ -99,7 +105,7 @@ func TestCancelAllWorkflowsNoRuns(t *testing.T) {
 		return 200, `{"total_count":0,"workflow_runs":[]}`
 	})
 	var out bytes.Buffer
-	if err := cancelAllWorkflows(client, "owner/repo", 42, &out); err != nil {
+	if err := cancelAllWorkflows(context.Background(), client, "owner/repo", 42, &out); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "No active workflow runs") {
@@ -125,7 +131,7 @@ func TestCancelAllWorkflowsErrors(t *testing.T) {
 				}
 				return 403, `{"message":"Forbidden"}`
 			})
-			if err := cancelAllWorkflows(client, "owner/repo", 42, io.Discard); err == nil {
+			if err := cancelAllWorkflows(context.Background(), client, "owner/repo", 42, io.Discard); err == nil {
 				t.Fatal("expected API error")
 			}
 		})
@@ -148,7 +154,7 @@ func TestCancelAllWorkflowsContinuesAfterFailure(t *testing.T) {
 		return 202, ""
 	})
 	var out bytes.Buffer
-	err := cancelAllWorkflows(client, "owner/repo", 42, &out)
+	err := cancelAllWorkflows(context.Background(), client, "owner/repo", 42, &out)
 	if err == nil || !strings.Contains(err.Error(), "run 1") {
 		t.Fatalf("expected run 1 error, got %v", err)
 	}
@@ -167,7 +173,7 @@ func TestCancelAllWorkflowsUnavailableSource(t *testing.T) {
 		}
 		return 200, `{"head":{"ref":"topic","repo":null}}`
 	})
-	if err := cancelAllWorkflows(client, "owner/repo", 42, io.Discard); err == nil {
+	if err := cancelAllWorkflows(context.Background(), client, "owner/repo", 42, io.Discard); err == nil {
 		t.Fatal("expected unavailable source error")
 	}
 }

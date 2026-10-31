@@ -10,6 +10,16 @@ description: >-
 Use `gh kit` in the target repository. Commands resolve the repository and GitHub host from
 that checkout and use GitHub CLI authentication.
 
+Sentry telemetry is enabled by default for errors and panics, command and GitHub request traces,
+lifecycle logs, breadcrumbs, command count and duration metrics, and a runtime goroutine gauge.
+Events include build, module, OS, and runtime metadata. Arguments, output, repository details,
+request URLs, credentials, and raw error messages are excluded. Tracing headers are not sent to
+GitHub. Set `TELEMETRY_DISABLED=true` to disable telemetry, for example:
+
+```bash
+TELEMETRY_DISABLED=true gh kit pr comments --pr 123
+```
+
 ## Pull request review comments
 
 ```bash

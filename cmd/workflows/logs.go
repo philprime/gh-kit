@@ -1,12 +1,14 @@
 package workflows
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 
 	"github.com/cli/go-gh/v2/pkg/api"
+	"github.com/philprime/gh-kit/internal/telemetry"
 	"github.com/spf13/cobra"
 )
 
@@ -31,7 +33,12 @@ func newLogsCmd(deps dependencies) *cobra.Command {
 				return fmt.Errorf("create GitHub client: %w", err)
 			}
 			path := fmt.Sprintf("repos/%s/%s/actions/jobs/%d/logs", repo.Owner, repo.Name, job)
-			response, err := client.RequestWithContext(command.Context(), http.MethodGet, path, nil)
+			var response *http.Response
+			err = telemetry.TraceRequest(command.Context(), http.MethodGet, func(ctx context.Context) error {
+				var err error
+				response, err = client.RequestWithContext(ctx, http.MethodGet, path, nil)
+				return err
+			})
 			if err != nil {
 				return fmt.Errorf("get logs for job %d: %w", job, err)
 			}
