@@ -1,13 +1,16 @@
 package pr
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 
 	"github.com/cli/go-gh/v2/pkg/api"
 	"github.com/cli/go-gh/v2/pkg/repository"
+	"github.com/philprime/gh-kit/internal/telemetry"
 	"github.com/spf13/cobra"
 )
 
@@ -36,7 +39,7 @@ func newCommentsCmd(deps dependencies) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("create GitHub client: %w", err)
 			}
-			return readComments(client, repo.Owner+"/"+repo.Name, pr, command.OutOrStdout())
+			return readComments(command.Context(), client, repo.Owner+"/"+repo.Name, pr, command.OutOrStdout())
 		},
 	}
 	command.Flags().IntVar(&pr, "pr", 0, "Pull request number in the current repository (required)")
@@ -44,12 +47,14 @@ func newCommentsCmd(deps dependencies) *cobra.Command {
 	return command
 }
 
-func readComments(client *api.RESTClient, repo string, pr int, out io.Writer) error {
+func readComments(ctx context.Context, client *api.RESTClient, repo string, pr int, out io.Writer) error {
 	comments := make([]json.RawMessage, 0)
 	for page := 1; ; page++ {
 		var response []json.RawMessage
 		path := fmt.Sprintf("repos/%s/pulls/%d/comments?per_page=100&page=%d", repo, pr, page)
-		if err := client.Get(path, &response); err != nil {
+		if err := telemetry.TraceRequest(ctx, http.MethodGet, func(ctx context.Context) error {
+			return client.DoWithContext(ctx, http.MethodGet, path, nil, &response)
+		}); err != nil {
 			return fmt.Errorf("list review comments for PR #%d: %w", pr, err)
 		}
 		comments = append(comments, response...)

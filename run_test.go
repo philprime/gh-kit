@@ -3,10 +3,80 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
+	"net/http"
 	"strings"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/getsentry/sentry-go"
 )
+
+type telemetryTransport struct {
+	mu      sync.Mutex
+	payload string
+}
+
+func (r *telemetryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		return nil, err
+	}
+	r.mu.Lock()
+	r.payload += string(body)
+	r.mu.Unlock()
+	return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader("{}")), Request: req}, nil
+}
+
+func TestRunTelemetry(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		args            []string
+		writer          io.Writer
+		wantError       bool
+		wantTransaction bool
+	}{
+		{"success", []string{"agent", "skills", "list"}, io.Discard, false, true},
+		{"failure", []string{"agent", "skills", "list"}, failingWriter{}, true, true},
+		{"help", []string{"agent", "skills", "list", "--help"}, io.Discard, false, false},
+		{"invalid", []string{"agent", "skills", "list", "private-value"}, io.Discard, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			transport := &telemetryTransport{}
+			client, err := sentry.NewClient(sentry.ClientOptions{
+				Dsn: "https://public@example.invalid/1", EnableTracing: true, TracesSampleRate: 1,
+				HTTPTransport: transport, DisableClientReports: true,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer client.Close()
+			ctx := sentry.SetHubOnContext(context.Background(), sentry.NewHub(client, sentry.NewScope()))
+			err = run(ctx, tc.args, tc.writer, io.Discard)
+			if (err != nil) != tc.wantError {
+				t.Fatalf("run error: %v", err)
+			}
+			if !client.Flush(2 * time.Second) {
+				t.Fatal("flush timed out")
+			}
+			transport.mu.Lock()
+			payload := transport.payload
+			transport.mu.Unlock()
+			if got := strings.Contains(payload, `"transaction":"gh kit agent skills list"`); got != tc.wantTransaction {
+				t.Fatalf("transaction=%v, want %v: %s", got, tc.wantTransaction, payload)
+			}
+			if strings.Contains(payload, "private-value") {
+				t.Fatal("argument leaked into telemetry")
+			}
+		})
+	}
+}
+
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("write failed") }
 
 func TestCommandHelp(t *testing.T) {
 	for _, args := range [][]string{{"--help"}, {"workflows", "--help"}, {"workflows", "cancel-all", "--help"}} {
