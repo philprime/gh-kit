@@ -17,9 +17,10 @@ func NewWorkflowsCmd() *cobra.Command {
 			return errors.New("a workflows subcommand is required")
 		},
 	}
-	command.AddCommand(newCancelAllCmd(dependencies{
+	deps := dependencies{
 		currentRepository: repository.Current,
 		newRESTClient:     api.NewRESTClient,
-	}))
+	}
+	command.AddCommand(newCancelAllCmd(deps), newLogsCmd(deps))
 	return command
 }
