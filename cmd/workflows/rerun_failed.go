@@ -9,7 +9,7 @@ import (
 	"net/url"
 
 	"github.com/cli/go-gh/v2/pkg/api"
-	"github.com/cli/go-gh/v2/pkg/repository"
+	"github.com/philprime/gh-kit/internal/repoflag"
 	"github.com/philprime/gh-kit/internal/telemetry"
 	"github.com/spf13/cobra"
 )
@@ -17,7 +17,6 @@ import (
 func newRerunCmd(deps dependencies) *cobra.Command {
 	var pr int
 	var failed, cancelled bool
-	var repoOverride string
 	command := &cobra.Command{
 		Use:     "rerun",
 		Short:   "Rerun failed or cancelled jobs for a pull request's current head commit",
@@ -31,18 +30,9 @@ func newRerunCmd(deps dependencies) *cobra.Command {
 			if pr <= 0 {
 				return errors.New("--pr must be a positive pull request number")
 			}
-			var repo repository.Repository
-			var err error
-			if command.Flags().Changed("repo") {
-				repo, err = repository.Parse(repoOverride)
-				if err != nil {
-					return fmt.Errorf("parse repository: %w", err)
-				}
-			} else {
-				repo, err = deps.currentRepository()
-				if err != nil {
-					return fmt.Errorf("resolve current repository: %w", err)
-				}
+			repo, err := repoflag.Resolve(command, deps.currentRepository)
+			if err != nil {
+				return err
 			}
 			client, err := deps.newRESTClient(api.ClientOptions{Host: repo.Host})
 			if err != nil {
@@ -55,7 +45,7 @@ func newRerunCmd(deps dependencies) *cobra.Command {
 	command.MarkFlagRequired("pr")
 	command.Flags().BoolVar(&failed, "failed", false, "Rerun failed or timed-out jobs and their dependents")
 	command.Flags().BoolVar(&cancelled, "cancelled", false, "Rerun cancelled jobs and their dependents")
-	command.Flags().StringVarP(&repoOverride, "repo", "R", "", "Select another repository using [HOST/]OWNER/REPO or a repository URL")
+	repoflag.Add(command)
 	return command
 }
 
