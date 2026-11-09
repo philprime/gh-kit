@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/cli/go-gh/v2/pkg/api"
+	"github.com/philprime/gh-kit/internal/repoflag"
 	"github.com/philprime/gh-kit/internal/telemetry"
 	"github.com/spf13/cobra"
 )
@@ -17,16 +18,16 @@ func newLogsCmd(deps dependencies) *cobra.Command {
 	command := &cobra.Command{
 		Use:     "logs",
 		Short:   "Read raw GitHub Actions job logs",
-		Long:    "Read logs for a GitHub Actions job in the current repository.\nOutput preserves ANSI escape sequences.",
+		Long:    "Read logs for a GitHub Actions job in the selected repository.\nOutput preserves ANSI escape sequences.",
 		Example: "  gh kit workflows logs --job 124568269207",
 		Args:    cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
 			if job <= 0 {
 				return errors.New("--job must be a positive job ID")
 			}
-			repo, err := deps.currentRepository()
+			repo, err := repoflag.Resolve(command, deps.currentRepository)
 			if err != nil {
-				return fmt.Errorf("resolve current repository: %w", err)
+				return err
 			}
 			client, err := deps.newRESTClient(api.ClientOptions{Host: repo.Host})
 			if err != nil {
@@ -49,7 +50,8 @@ func newLogsCmd(deps dependencies) *cobra.Command {
 			return nil
 		},
 	}
-	command.Flags().Int64Var(&job, "job", 0, "Job ID in the current repository (required)")
+	command.Flags().Int64Var(&job, "job", 0, "Job ID in the selected repository (required)")
 	command.MarkFlagRequired("job")
+	repoflag.Add(command)
 	return command
 }
