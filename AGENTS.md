@@ -13,6 +13,7 @@
 - Use `jq` for shell-based JSON processing and `yq` for YAML. Use native Go parsing in application code.
 - Write prose without em dashes or semicolons. Use full sentences.
 - Keep documentation concise. Link to configuration and code rather than duplicating details that can drift.
+- When adding, renaming, removing, or changing public commands, keep the `README.md` Usage section current with prose and examples for PR and workflow commands. Keep Agent Skills documentation to a brief note that skills ship with the CLI.
 - Wrap Go errors with context using `fmt.Errorf("context: %w", err)` and lowercase messages. Log an error or return it, never both.
 - Add a focused failing test before implementing new command behavior or fixing bugs. Test GitHub API behavior with the real REST client and a controlled HTTP transport, not live requests.
 - Verify changes with the relevant justfile recipes before claiming completion or committing. For Go changes, run `just build test vet`. Run `just format` for formatting.
