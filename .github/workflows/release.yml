@@ -25,3 +25,25 @@ jobs:
         with:
           generate_attestations: true
           go_version_file: go.mod
+      - name: Add update instructions to release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          notes="$RUNNER_TEMP/release-notes.md"
+          gh release view "$RELEASE_TAG" --json body --jq '.body' > "$notes"
+          if grep -Fq 'gh extension upgrade philprime/gh-kit' "$notes"; then
+            exit 0
+          fi
+          cat >> "$notes" <<'EOF'
+
+          ## Update
+
+          Update the installed GitHub CLI extension to the latest release:
+
+          ```sh
+          gh extension upgrade philprime/gh-kit
+          ```
+          EOF
+          gh release edit "$RELEASE_TAG" --notes-file "$notes"
