@@ -1,8 +1,8 @@
 ---
 name: gh-kit
 description: >-
-  Use when reading GitHub pull request review comments, retrieving CI job logs, or cancelling
-  active workflows for a pull request. Use gh kit commands in the target repository.
+  Use when reading GitHub pull request review comments, retrieving CI job logs, rerunning
+  failed jobs, or cancelling active workflows for a pull request. Use gh kit commands in the target repository.
 ---
 
 # GitHub Workflow Utilities
@@ -49,6 +49,22 @@ gh kit workflows cancel-all --pr 123
 Requests cancellation of active workflow runs for the pull request's source branch and repository.
 Obtain user approval before cancellation. Cancellation requests do not establish that every run
 has already stopped. Report partial failures.
+
+## Rerun failed or cancelled jobs
+
+```bash
+gh kit workflows rerun --failed --pr 123
+gh kit workflows rerun --cancelled --pr 123
+gh kit workflows rerun --failed --cancelled --pr 9458 -R getsentry/sentry-cocoa
+```
+
+Use `--repo` / `-R` with `[HOST/]OWNER/REPO` or a repository URL to override the checkout.
+At least one of `--failed` or `--cancelled` must be enabled. `--failed` selects failed or timed-out
+jobs. `--cancelled` selects cancelled jobs. Both flags select either conclusion, not their
+intersection. Selection uses the latest jobs in completed workflows on the PR's current head
+commit and source repository, regardless of the parent workflow's conclusion. GitHub also
+reruns dependent jobs. Active workflow runs are skipped. Obtain user approval before requesting
+reruns. Report partial failures. A successful request does not mean the rerun has finished or passed.
 
 ## Skill management
 
