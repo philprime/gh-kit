@@ -49,6 +49,7 @@ func newCancelAllCmd(deps dependencies) *cobra.Command {
 type workflowRun struct {
 	ID             int64  `json:"id"`
 	Status         string `json:"status"`
+	HeadSHA        string `json:"head_sha"`
 	HeadRepository struct {
 		ID int64 `json:"id"`
 	} `json:"head_repository"`

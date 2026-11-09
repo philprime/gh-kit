@@ -21,6 +21,6 @@ func NewWorkflowsCmd() *cobra.Command {
 		currentRepository: repository.Current,
 		newRESTClient:     api.NewRESTClient,
 	}
-	command.AddCommand(newCancelAllCmd(deps), newLogsCmd(deps))
+	command.AddCommand(newCancelAllCmd(deps), newLogsCmd(deps), newRerunCmd(deps))
 	return command
 }
