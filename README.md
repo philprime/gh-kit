@@ -2,9 +2,23 @@
 
 A GitHub CLI extension for everyday workflow utilities. Built around frequently used tasks, with commands kept reusable across repositories.
 
+## Installation
+
+Install [GitHub CLI](https://cli.github.com/) and authenticate with `gh auth login`, then install the extension:
+
+```sh
+gh extension install philprime/gh-kit
+```
+
+Update to the latest release:
+
+```sh
+gh extension upgrade philprime/gh-kit
+```
+
 ## Local installation
 
-Install dependencies with [Homebrew](https://brew.sh/):
+Install development dependencies with [Homebrew](https://brew.sh/):
 
 ```sh
 brew bundle
@@ -14,6 +28,7 @@ Authenticate with [GitHub CLI](https://cli.github.com/) using `gh auth login`. F
 
 ```sh
 just install
+just install-extension
 ```
 
 ## Usage
