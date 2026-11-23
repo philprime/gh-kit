@@ -69,7 +69,7 @@ Rerun failed or timed-out jobs for a pull request's current head commit:
 gh kit workflows rerun --pr 123 --failed
 ```
 
-Use `--cancelled` instead of or alongside `--failed` to include cancelled jobs. GitHub also reruns dependent jobs. Active workflow runs are skipped.
+Use `--cancelled` instead of or alongside `--failed` to include cancelled jobs. GitHub also reruns dependent jobs. Active workflow runs are skipped. The command reports progress while listing runs, inspecting jobs, and requesting reruns. Job inspection uses bounded concurrency and must finish successfully before any reruns are requested.
 
 ### Agent Skills
 

@@ -68,7 +68,8 @@ jobs. `--cancelled` selects cancelled jobs. Both flags select either conclusion,
 intersection. Selection uses the latest jobs in completed workflows on the PR's current head
 commit and source repository, regardless of the parent workflow's conclusion. GitHub also
 reruns dependent jobs. Active workflow runs are skipped. Obtain user approval before requesting
-reruns. Report partial failures. A successful request does not mean the rerun has finished or passed.
+reruns. Progress output reports run discovery, concurrent job inspection, and rerun requests.
+All job inspection must succeed before any reruns are requested. Report partial failures. A successful request does not mean the rerun has finished or passed.
 
 ## Skill management
 
