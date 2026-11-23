@@ -1,6 +1,6 @@
 module github.com/philprime/gh-kit
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/cli/go-gh/v2 v2.17.0
