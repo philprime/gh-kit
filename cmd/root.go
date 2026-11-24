@@ -6,6 +6,7 @@ import (
 	"github.com/philprime/gh-kit/cmd/agent"
 	"github.com/philprime/gh-kit/cmd/pr"
 	"github.com/philprime/gh-kit/cmd/workflows"
+	"github.com/philprime/gh-kit/internal/repoflag"
 	"github.com/spf13/cobra"
 )
 
@@ -24,6 +25,7 @@ func NewRootCommand() *cobra.Command {
 			return errors.New("a command is required")
 		},
 	}
+	repoflag.Add(command)
 	command.CompletionOptions.DisableDefaultCmd = true
 	command.AddCommand(workflows.NewWorkflowsCmd(), pr.NewPRCmd(), agent.NewAgentCmd())
 	return command

@@ -33,7 +33,9 @@ just install-extension
 
 ## Usage
 
-Run these commands from a GitHub repository checkout. Use `gh kit --help` or append `--help` to any command for available options.
+GitHub commands default to the current repository. Use `--repo` (`-R`) with `[HOST/]OWNER/REPO` or a repository URL to select another repository without a local checkout.
+
+Use `gh kit --help` or append `--help` to any command for available options. Failed invocations also show the relevant help on standard error.
 
 ### Pull request review comments
 
@@ -41,6 +43,7 @@ Read all inline review comments and replies as JSON:
 
 ```sh
 gh kit pr comments --pr 123
+gh kit pr comments --pr 123 --repo owner/repo
 ```
 
 ### Cancel workflow runs
@@ -67,6 +70,7 @@ Rerun failed or timed-out jobs for a pull request's current head commit:
 
 ```sh
 gh kit workflows rerun --pr 123 --failed
+gh kit --repo owner/repo workflows rerun --pr 123 --failed
 ```
 
 Use `--cancelled` instead of or alongside `--failed` to include cancelled jobs. GitHub also reruns dependent jobs. Active workflow runs are skipped. The command reports progress while listing runs, inspecting jobs, and requesting reruns. Job inspection uses bounded concurrency and must finish successfully before any reruns are requested.

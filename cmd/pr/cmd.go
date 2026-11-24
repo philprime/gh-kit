@@ -5,6 +5,7 @@ import (
 
 	"github.com/cli/go-gh/v2/pkg/api"
 	"github.com/cli/go-gh/v2/pkg/repository"
+	"github.com/philprime/gh-kit/internal/repoflag"
 	"github.com/spf13/cobra"
 )
 
@@ -17,6 +18,7 @@ func NewPRCmd() *cobra.Command {
 			return errors.New("a pr subcommand is required")
 		},
 	}
+	repoflag.Add(command)
 	command.AddCommand(newCommentsCmd(dependencies{
 		currentRepository: repository.Current,
 		newRESTClient:     api.NewRESTClient,

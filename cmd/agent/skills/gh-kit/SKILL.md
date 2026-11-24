@@ -10,7 +10,9 @@ description: >-
 Repository commands use GitHub CLI authentication and resolve the repository and host from
 the current checkout by default. All `pr` and `workflows` commands accept `--repo` / `-R` with
 `[HOST/]OWNER/REPO` or a repository URL to target another repository without a local checkout.
-Local `agent skills` commands do not use a GitHub repository.
+Repository selection is also available before the `pr` or `workflows` command or its subcommand.
+Use `--help` at any command level for usage, options, and available subcommands. Failed invocations
+show the relevant help on standard error. Local `agent skills` commands do not use a GitHub repository.
 
 Sentry telemetry is enabled by default for errors and panics, command and GitHub request traces,
 lifecycle logs, breadcrumbs, command count and duration metrics, and a runtime goroutine gauge.
