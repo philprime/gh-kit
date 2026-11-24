@@ -77,7 +77,7 @@ Use `--cancelled` instead of or alongside `--failed` to include cancelled jobs. 
 
 ### Agent Skills
 
-The CLI ships with bundled Agent Skills for coding agents. Run `gh kit agent skills --help` for details.
+The CLI ships with bundled Agent Skills for coding agents, with installation status and safe updates for managed skills. Run `gh kit agent skills --help` for details.
 
 ## Development
 

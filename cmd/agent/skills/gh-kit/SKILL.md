@@ -86,6 +86,8 @@ gh kit agent skills list
 gh kit agent skills get gh-kit
 gh kit agent skills install --all --dry-run
 gh kit agent skills install --all
+gh kit agent skills update --dry-run
+gh kit agent skills update
 gh kit agent skills uninstall --all --dry-run
 gh kit agent skills uninstall --all --yes
 ```
@@ -94,6 +96,11 @@ Obtain user approval before installing or removing skills. The default root is `
 Use `--project` for the nearest Git root's `.agents` directory, or the current directory outside
 Git. Use `--dir PATH` for another `.agents` root. Skills are stored under `PATH/skills`.
 Installation does not configure individual agent tools.
+
+`list` accepts `--project` and `--dir` and reports installation status and paths without changing files.
+`update` defaults to all installed managed bundled skills, or accepts names or `--all`.
+It skips missing and unmanaged skills and refuses local edits. It supports the same root options and
+`--dry-run`, but not `--force`. Install, update, and uninstall report outcomes and a summary.
 
 `--force` replaces differing managed `SKILL.md` files only, never unmanaged files. Uninstall
 refuses edited managed files and preserves unrelated files. Dry runs preview pending recovery

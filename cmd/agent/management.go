@@ -17,6 +17,14 @@ type installation struct {
 // Preflight the entire selection before recovering or changing any skill.
 // Once execution starts, return completed outcomes alongside a later failure.
 func manage(skills []skill, root string, removing, dryRun, force bool, ops fileOperations) ([]string, error) {
+	installations, err := inspectInstallations(skills, root, ops)
+	if err != nil {
+		return nil, err
+	}
+	return manageInstallations(installations, removing, dryRun, force)
+}
+
+func inspectInstallations(skills []skill, root string, ops fileOperations) ([]installation, error) {
 	if strings.TrimSpace(root) == "" {
 		return nil, errors.New("skill installation root must not be empty")
 	}
@@ -33,6 +41,10 @@ func manage(skills []skill, root string, removing, dryRun, force bool, ops fileO
 		}
 		installations = append(installations, installation{skill: skill, store: store, inspection: inspected})
 	}
+	return installations, nil
+}
+
+func manageInstallations(installations []installation, removing, dryRun, force bool) ([]string, error) {
 	for _, item := range installations {
 		state := item.inspection.state
 		if state.Content == nil {
@@ -60,6 +72,48 @@ func manage(skills []skill, root string, removing, dryRun, force bool, ops fileO
 	return completed, nil
 }
 
+func update(skills []skill, root string, dryRun bool, ops fileOperations) ([]string, error) {
+	installations, err := inspectInstallations(skills, root, ops)
+	if err != nil {
+		return nil, err
+	}
+	var selected []installation
+	for _, item := range installations {
+		state := item.inspection.state
+		if state.Content == nil || state.Receipt == nil {
+			continue
+		}
+		if !reflect.DeepEqual(state.Content, state.Receipt.Content) {
+			return nil, fmt.Errorf("managed skill %q has local edits. Resolve them before updating, or run 'gh kit agent skills install %s --force' to replace them", item.skill.name, item.skill.name)
+		}
+		selected = append(selected, item)
+	}
+	// Updates have already verified that every selected file matches its receipt.
+	return manageInstallations(selected, false, dryRun, true)
+}
+
+func outcomeSummary(outcomes []string) string {
+	if len(outcomes) == 0 {
+		return "No skills to process."
+	}
+	var counts []string
+	for _, label := range []string{"Installed", "Updated", "Unchanged", "Uninstalled", "Not installed", "Would install", "Would update", "Would uninstall"} {
+		count := 0
+		for _, outcome := range outcomes {
+			if strings.HasPrefix(outcome, "Would recover pending operation: ") {
+				_, outcome, _ = strings.Cut(outcome, "\n")
+			}
+			if strings.HasPrefix(outcome, label+":") {
+				count++
+			}
+		}
+		if count > 0 {
+			counts = append(counts, fmt.Sprintf("%d %s", count, strings.ToLower(label)))
+		}
+	}
+	return "Summary: " + strings.Join(counts, ", ")
+}
+
 func (item installation) execute(removing, dryRun bool) (string, error) {
 	if !dryRun {
 		if err := item.store.recover(item.inspection); err != nil {
@@ -85,13 +139,21 @@ func (item installation) execute(removing, dryRun bool) (string, error) {
 		if reflect.DeepEqual(state.Content, content) && state.Receipt != nil && reflect.DeepEqual(state.Receipt.Content, content) {
 			result = "Unchanged: " + item.skill.name
 		} else if dryRun {
-			result = fmt.Sprintf("Would install: %s at %s", item.skill.name, item.store.file())
+			verb := "install"
+			if state.Content != nil {
+				verb = "update"
+			}
+			result = fmt.Sprintf("Would %s: %s at %s", verb, item.skill.name, item.store.file())
 		} else {
 			next := snapshot{Content: content, Receipt: &receipt{Name: item.skill.name, Content: content}}
 			if err := item.store.update(state, next); err != nil {
 				return "", err
 			}
-			result = fmt.Sprintf("Installed: %s at %s", item.skill.name, item.store.file())
+			verb := "Installed"
+			if state.Content != nil {
+				verb = "Updated"
+			}
+			result = fmt.Sprintf("%s: %s at %s", verb, item.skill.name, item.store.file())
 		}
 	}
 	if dryRun && item.inspection.pending != nil {

@@ -10,6 +10,77 @@ import (
 
 func fixture(name, content string) skill { return skill{name: name, content: content} }
 
+func TestUpdatePreflightsSelection(t *testing.T) {
+	root := t.TempDir()
+	old := []skill{fixture("first", "old first"), fixture("second", "old second")}
+	if _, err := manage(old, root, false, false, false, diskOperations()); err != nil {
+		t.Fatal(err)
+	}
+	newSkills := []skill{fixture("first", "new first"), fixture("second", "new second"), fixture("third", "new third")}
+	put(t, filepath.Join(root, "skills/third/SKILL.md"), "unmanaged")
+	put(t, filepath.Join(root, "skills/second/SKILL.md"), "local edits")
+	for _, dry := range []bool{false, true} {
+		out, err := update(newSkills, root, dry, diskOperations())
+		if err == nil || len(out) != 0 {
+			t.Fatalf("expected preflight failure: %v %v", out, err)
+		}
+		if read(t, filepath.Join(root, "skills/first/SKILL.md")) != "old first" {
+			t.Fatal("earlier selection changed")
+		}
+	}
+	if _, err := update(newSkills[:1], root, false, diskOperations()); err != nil {
+		t.Fatal(err)
+	}
+	if read(t, filepath.Join(root, "skills/first/SKILL.md")) != "new first" || read(t, filepath.Join(root, "skills/second/SKILL.md")) != "local edits" || read(t, filepath.Join(root, "skills/third/SKILL.md")) != "unmanaged" {
+		t.Fatal("named update changed unselected skills")
+	}
+}
+
+func TestListAndUpdatePendingRecovery(t *testing.T) {
+	root := t.TempDir()
+	if _, err := manage([]skill{fixture("gh-kit", "old")}, root, false, false, false, diskOperations()); err != nil {
+		t.Fatal(err)
+	}
+	ops := diskOperations()
+	write := ops.write
+	failure := errors.New("injected receipt failure")
+	ops.write = func(path string, data []byte) error {
+		if filepath.Base(path) == ".gh-kit-managed.json" {
+			return failure
+		}
+		return write(path, data)
+	}
+	if _, err := update(bundled, root, false, ops); !errors.Is(err, failure) {
+		t.Fatalf("expected injected failure: %v", err)
+	}
+	journal := filepath.Join(root, "skills/gh-kit/.gh-kit-pending.json")
+	receipt := filepath.Join(root, "skills/gh-kit/.gh-kit-managed.json")
+	before, receiptBefore := read(t, journal), read(t, receipt)
+	out := runOK(t, "list", "--dir", root)
+	if !strings.Contains(out, "\tinstalled (pending recovery)\t") {
+		t.Fatalf("missing recovery status: %q", out)
+	}
+	out = runOK(t, "update", "--dry-run", "--dir", root)
+	if out != "Would recover pending operation: gh-kit\nUnchanged: gh-kit\nSummary: 1 unchanged\n" {
+		t.Fatalf("unexpected recovery preview: %q", out)
+	}
+	if read(t, journal) != before || read(t, receipt) != receiptBefore {
+		t.Fatal("read-only operation changed pending recovery")
+	}
+	runOK(t, "update", "--dir", root)
+	absent(t, journal)
+	if read(t, filepath.Join(root, "skills/gh-kit/SKILL.md")) != bundled[0].content {
+		t.Fatal("wrong recovered skill")
+	}
+}
+
+func TestOutcomeSummary(t *testing.T) {
+	out := outcomeSummary([]string{"Installed: first at /path", "Would recover pending operation: second\nUpdated: second at /path", "Updated: third at /path\nwith-newline", "Unchanged: fourth"})
+	if out != "Summary: 1 installed, 2 updated, 1 unchanged" {
+		t.Fatalf("incorrect summary: %q", out)
+	}
+}
+
 func TestBatchPreflight(t *testing.T) {
 	for _, removing := range []bool{false, true} {
 		t.Run(map[bool]string{false: "install", true: "uninstall"}[removing], func(t *testing.T) {
@@ -234,7 +305,11 @@ func TestRepairReceiptsAndMissingContent(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(results) != 1 || !strings.HasPrefix(results[0], "Installed: example at ") {
+			prefix := "Updated: example at "
+			if missingContent {
+				prefix = "Installed: example at "
+			}
+			if len(results) != 1 || !strings.HasPrefix(results[0], prefix) {
 				t.Fatalf("unexpected repair result: %v", results)
 			}
 			if read(t, filepath.Join(dir, "SKILL.md")) != "new" {
