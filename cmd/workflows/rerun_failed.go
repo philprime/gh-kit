@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/cli/go-gh/v2/pkg/api"
+	"github.com/philprime/gh-kit/internal/parallel"
 	"github.com/philprime/gh-kit/internal/repoflag"
 	"github.com/philprime/gh-kit/internal/telemetry"
 	"github.com/spf13/cobra"
@@ -150,7 +151,7 @@ func rerunWorkflows(ctx context.Context, client *api.RESTClient, repo string, pr
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("inspect workflow jobs: %w", err)
 	}
-	// Keep rerun requests in discovery order regardless of inspection completion order.
+	// Keep job discovery order regardless of inspection completion order.
 	var jobs []int64
 	for _, runJobs := range jobsByRun {
 		jobs = append(jobs, runJobs...)
@@ -160,10 +161,11 @@ func rerunWorkflows(ctx context.Context, client *api.RESTClient, repo string, pr
 		fmt.Fprintf(out, "No matching jobs for PR #%d's current head commit.\n", pr)
 		return nil
 	}
-	requested := 0
-	var failures []error
-	for index, job := range jobs {
+	results := parallel.Do(ctx, len(jobs), func(index int) error {
+		job := jobs[index]
+		outputMu.Lock()
 		fmt.Fprintf(out, "Requesting rerun for job %d (%d/%d).\n", job, index+1, len(jobs))
+		outputMu.Unlock()
 		var response *http.Response
 		err := telemetry.TraceRequest(ctx, http.MethodPost, func(ctx context.Context) error {
 			var err error
@@ -171,15 +173,21 @@ func rerunWorkflows(ctx context.Context, client *api.RESTClient, repo string, pr
 			return err
 		})
 		if err != nil {
-			failures = append(failures, fmt.Errorf("rerun job %d: %w", job, err))
-			continue
+			return fmt.Errorf("rerun job %d: %w", job, err)
 		}
 		response.Body.Close()
+		return nil
+	})
+	requested := 0
+	for index, err := range results {
+		if err != nil {
+			continue
+		}
 		requested++
-		fmt.Fprintf(out, "Rerun requested for job %d.\n", job)
+		fmt.Fprintf(out, "Rerun requested for job %d.\n", jobs[index])
 	}
 	fmt.Fprintf(out, "Requested reruns for %d job(s) for PR #%d.\n", requested, pr)
-	return errors.Join(failures...)
+	return errors.Join(results...)
 }
 
 func matchingJobsForRun(ctx context.Context, client *api.RESTClient, base string, runID int64, failed, cancelled bool, progress func(int)) ([]int64, error) {

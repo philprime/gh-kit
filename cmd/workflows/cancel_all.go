@@ -10,6 +10,7 @@ import (
 
 	"github.com/cli/go-gh/v2/pkg/api"
 	"github.com/cli/go-gh/v2/pkg/repository"
+	"github.com/philprime/gh-kit/internal/parallel"
 	"github.com/philprime/gh-kit/internal/repoflag"
 	"github.com/philprime/gh-kit/internal/telemetry"
 	"github.com/spf13/cobra"
@@ -123,9 +124,8 @@ func cancelAllWorkflows(ctx context.Context, client *api.RESTClient, repo string
 		return nil
 	}
 
-	cancelled := 0
-	var failures []error
-	for _, run := range runs {
+	results := parallel.Do(ctx, len(runs), func(index int) error {
+		run := runs[index]
 		var response *http.Response
 		err := telemetry.TraceRequest(ctx, http.MethodPost, func(ctx context.Context) error {
 			var err error
@@ -133,13 +133,19 @@ func cancelAllWorkflows(ctx context.Context, client *api.RESTClient, repo string
 			return err
 		})
 		if err != nil {
-			failures = append(failures, fmt.Errorf("cancel workflow run %d: %w", run.ID, err))
-			continue
+			return fmt.Errorf("cancel workflow run %d: %w", run.ID, err)
 		}
 		response.Body.Close()
+		return nil
+	})
+	cancelled := 0
+	for index, err := range results {
+		if err != nil {
+			continue
+		}
 		cancelled++
-		fmt.Fprintf(out, "Cancellation requested for workflow run %d.\n", run.ID)
+		fmt.Fprintf(out, "Cancellation requested for workflow run %d.\n", runs[index].ID)
 	}
 	fmt.Fprintf(out, "Requested cancellation of %d workflow run(s) for PR #%d.\n", cancelled, pr)
-	return errors.Join(failures...)
+	return errors.Join(results...)
 }

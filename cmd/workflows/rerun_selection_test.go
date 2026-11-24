@@ -6,7 +6,9 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/cli/go-gh/v2/pkg/api"
@@ -26,6 +28,7 @@ func TestRerunJobSelection(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var attempted []string
+			var mutationMu sync.Mutex
 			jobPages := 0
 			client := testClient(t, func(r *http.Request) (int, string) {
 				switch {
@@ -49,7 +52,9 @@ func TestRerunJobSelection(t *testing.T) {
 					if jobPages != 2 {
 						t.Error("mutation before all jobs collected")
 					}
+					mutationMu.Lock()
 					attempted = append(attempted, r.URL.Path)
+					mutationMu.Unlock()
 					return 201, ""
 				}
 				t.Errorf("unexpected request: %s %s", r.Method, r.URL)
@@ -66,6 +71,7 @@ func TestRerunJobSelection(t *testing.T) {
 			if err := command.Execute(); err != nil {
 				t.Fatal(err)
 			}
+			slices.Sort(attempted)
 			if !reflect.DeepEqual(attempted, tt.want) {
 				t.Fatalf("attempted %v, want %v", attempted, tt.want)
 			}
