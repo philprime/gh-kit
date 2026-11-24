@@ -7,7 +7,9 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -53,6 +55,7 @@ func TestRerunInspectsRunsConcurrentlyBeforeMutating(t *testing.T) {
 	release := make(chan struct{})
 	var active, peak, completed atomic.Int32
 	var attempted []string
+	var mutationMu sync.Mutex
 	client := testClient(t, func(r *http.Request) (int, string) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/pulls/42"):
@@ -85,7 +88,9 @@ func TestRerunInspectsRunsConcurrentlyBeforeMutating(t *testing.T) {
 			if completed.Load() != 14 {
 				t.Error("rerun requested before every job page was inspected")
 			}
+			mutationMu.Lock()
 			attempted = append(attempted, r.URL.Path)
+			mutationMu.Unlock()
 			return 201, ""
 		default:
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL)
@@ -121,7 +126,8 @@ func TestRerunInspectsRunsConcurrentlyBeforeMutating(t *testing.T) {
 			want = append(want, fmt.Sprintf("/repos/owner/repo/actions/jobs/%d/rerun", id*10+page))
 		}
 	}
+	slices.Sort(attempted)
 	if !reflect.DeepEqual(attempted, want) {
-		t.Fatalf("rerun order: %v, want %v", attempted, want)
+		t.Fatalf("rerun targets: %v, want %v", attempted, want)
 	}
 }

@@ -39,7 +39,7 @@ Use `gh kit --help` or append `--help` to any command for available options. Fai
 
 ### Pull request review comments
 
-Read all inline review comments and replies as JSON:
+Read all inline review comments and replies as JSON. When GitHub advertises the last page, remaining pages are fetched with up to five concurrent requests and combined in page order:
 
 ```sh
 gh kit pr comments --pr 123
@@ -54,7 +54,7 @@ Request cancellation of active workflow runs for a pull request's source branch,
 gh kit workflows cancel-all --pr 123
 ```
 
-Completed runs are skipped. Runs without a PR association, such as push-triggered runs on the same source branch, are included.
+Completed runs are skipped. Runs without a PR association, such as push-triggered runs on the same source branch, are included. All run pages are collected before cancellation begins. Up to five cancellation requests run concurrently, and failures do not prevent other selected runs from being attempted.
 
 ### Read job logs
 
@@ -73,7 +73,7 @@ gh kit workflows rerun --pr 123 --failed
 gh kit --repo owner/repo workflows rerun --pr 123 --failed
 ```
 
-Use `--cancelled` instead of or alongside `--failed` to include cancelled jobs. GitHub also reruns dependent jobs. Active workflow runs are skipped. The command reports progress while listing runs, inspecting jobs, and requesting reruns. Job inspection uses bounded concurrency and must finish successfully before any reruns are requested.
+Use `--cancelled` instead of or alongside `--failed` to include cancelled jobs. GitHub also reruns dependent jobs. Active workflow runs are skipped. The command reports progress while listing runs, inspecting jobs, and requesting reruns. Job inspection must finish successfully before any reruns are requested. Inspection and rerun requests each use up to five concurrent requests. Rerun request order is not guaranteed. Confirmations and aggregated errors retain discovery order, and failures do not prevent other selected jobs from being attempted.
 
 ### Agent Skills
 

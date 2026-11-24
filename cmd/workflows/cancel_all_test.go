@@ -6,7 +6,9 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/cli/go-gh/v2/pkg/api"
@@ -37,6 +39,7 @@ func testClient(t *testing.T, handler func(*http.Request) (int, string)) *api.RE
 func TestCancelAllWorkflows(t *testing.T) {
 	// Catch missing pagination and cancellation of completed or unrelated runs.
 	var cancelled []string
+	var mutationMu sync.Mutex
 	client := testClient(t, func(r *http.Request) (int, string) {
 		if r.Context().Value(requestContextKey{}) != "command" {
 			t.Fatal("command context lost")
@@ -62,7 +65,9 @@ func TestCancelAllWorkflows(t *testing.T) {
      {"id":7,"status":"pending","head_repository":{"id":7},"pull_requests":[{"number":42}]}]}`
 			}
 		case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/cancel"):
+			mutationMu.Lock()
 			cancelled = append(cancelled, r.URL.Path)
+			mutationMu.Unlock()
 			return 202, ""
 		}
 		t.Errorf("unexpected request: %s %s", r.Method, r.URL)
@@ -86,6 +91,7 @@ func TestCancelAllWorkflows(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []string{"/repos/owner/repo/actions/runs/1/cancel", "/repos/owner/repo/actions/runs/2/cancel", "/repos/owner/repo/actions/runs/6/cancel", "/repos/owner/repo/actions/runs/7/cancel"}
+	slices.Sort(cancelled)
 	if !reflect.DeepEqual(cancelled, want) {
 		t.Fatalf("cancelled %v, want %v", cancelled, want)
 	}
@@ -140,6 +146,7 @@ func TestCancelAllWorkflowsErrors(t *testing.T) {
 
 func TestCancelAllWorkflowsContinuesAfterFailure(t *testing.T) {
 	var attempted []string
+	var mutationMu sync.Mutex
 	client := testClient(t, func(r *http.Request) (int, string) {
 		if strings.HasSuffix(r.URL.Path, "/pulls/42") {
 			return 200, `{"head":{"ref":"topic","repo":{"id":7}}}`
@@ -147,7 +154,9 @@ func TestCancelAllWorkflowsContinuesAfterFailure(t *testing.T) {
 		if r.Method == "GET" {
 			return 200, `{"total_count":2,"workflow_runs":[{"id":1,"status":"queued","head_repository":{"id":7}},{"id":2,"status":"in_progress","head_repository":{"id":7}}]}`
 		}
+		mutationMu.Lock()
 		attempted = append(attempted, r.URL.Path)
+		mutationMu.Unlock()
 		if strings.HasSuffix(r.URL.Path, "/1/cancel") {
 			return 403, `{"message":"Forbidden"}`
 		}
@@ -158,6 +167,7 @@ func TestCancelAllWorkflowsContinuesAfterFailure(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "run 1") {
 		t.Fatalf("expected run 1 error, got %v", err)
 	}
+	slices.Sort(attempted)
 	if !reflect.DeepEqual(attempted, []string{"/repos/owner/repo/actions/runs/1/cancel", "/repos/owner/repo/actions/runs/2/cancel"}) {
 		t.Fatalf("unexpected attempts: %v", attempted)
 	}

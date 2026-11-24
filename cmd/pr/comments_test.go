@@ -21,7 +21,7 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func TestComments(t *testing.T) {
-	for _, scenario := range []string{"paginated", "empty", "api error", "invalid json", "output error"} {
+	for _, scenario := range []string{"paginated", "paginated without links", "empty", "api error", "invalid json", "output error"} {
 		t.Run(scenario, func(t *testing.T) {
 			requests := 0
 			client, err := api.NewRESTClient(api.ClientOptions{
@@ -36,7 +36,7 @@ func TestComments(t *testing.T) {
 					}
 					status, body := 200, `[]`
 					switch scenario {
-					case "paginated":
+					case "paginated", "paginated without links":
 						switch r.URL.Query().Get("page") {
 						case "1":
 							var comments []string
@@ -56,7 +56,11 @@ func TestComments(t *testing.T) {
 					case "output error":
 						body = `[{"path":"a.go","body":"comment"}]`
 					}
-					return &http.Response{StatusCode: status, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
+					header := http.Header{"Content-Type": {"application/json"}}
+					if scenario == "paginated" && r.URL.Query().Get("page") == "1" {
+						header.Set("Link", `<https://github.example.com/api/v3/repos/owner/repo/pulls/42/comments?per_page=100&page=2>; rel="last"`)
+					}
+					return &http.Response{StatusCode: status, Header: header, Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
 				}),
 			})
 			if err != nil {
@@ -90,7 +94,7 @@ func TestComments(t *testing.T) {
 				t.Fatal(err)
 			}
 			want := "[]\n"
-			if scenario == "paginated" {
+			if strings.HasPrefix(scenario, "paginated") {
 				want = "[" + strings.Repeat(`{"path":"a.go","body":"first\nline","id":9007199254740993,"user":{"login":"reviewer"},"line":null},`, 100) + "{\"path\":\"b.go\",\"body\":\"last\"}]\n"
 				if requests != 2 {
 					t.Fatalf("got %d requests, want 2", requests)

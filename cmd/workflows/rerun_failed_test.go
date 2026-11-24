@@ -7,7 +7,9 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/cli/go-gh/v2/pkg/api"
@@ -16,6 +18,7 @@ import (
 
 func TestRerunFailedCommand(t *testing.T) {
 	var attempted []string
+	var mutationMu sync.Mutex
 	pages := 0
 	client := testClient(t, func(r *http.Request) (int, string) {
 		if r.Context().Value(requestContextKey{}) != "command" {
@@ -61,7 +64,9 @@ func TestRerunFailedCommand(t *testing.T) {
 			if pages != 2 {
 				t.Error("rerun requested before collecting all pages")
 			}
+			mutationMu.Lock()
 			attempted = append(attempted, r.URL.Path)
+			mutationMu.Unlock()
 			return 201, ""
 		}
 		t.Errorf("unexpected request: %s %s", r.Method, r.URL)
@@ -85,6 +90,7 @@ func TestRerunFailedCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []string{"/repos/owner/repo/actions/jobs/1/rerun", "/repos/owner/repo/actions/jobs/7/rerun"}
+	slices.Sort(attempted)
 	if !reflect.DeepEqual(attempted, want) {
 		t.Fatalf("attempted %v, want %v", attempted, want)
 	}
@@ -116,6 +122,7 @@ func TestRerunFailedErrors(t *testing.T) {
 	for _, stage := range []string{"pull", "source", "list", "jobs", "rerun"} {
 		t.Run(stage, func(t *testing.T) {
 			var attempted []string
+			var mutationMu sync.Mutex
 			client := testClient(t, func(r *http.Request) (int, string) {
 				if strings.HasSuffix(r.URL.Path, "/pulls/42") {
 					if stage == "pull" {
@@ -139,7 +146,9 @@ func TestRerunFailedErrors(t *testing.T) {
 					}
 					return 200, `{"total_count":2,"workflow_runs":[{"id":1,"status":"completed","conclusion":"failure","head_sha":"current","head_repository":{"id":7}},{"id":2,"status":"completed","conclusion":"failure","head_sha":"current","head_repository":{"id":7}}]}`
 				}
+				mutationMu.Lock()
 				attempted = append(attempted, r.URL.Path)
+				mutationMu.Unlock()
 				if strings.Contains(r.URL.Path, "/1/") {
 					return 403, `{"message":"Forbidden"}`
 				}
