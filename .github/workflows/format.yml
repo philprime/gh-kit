@@ -24,7 +24,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
       - name: Install dprint
         run: curl -fsSL https://dprint.dev/install.sh | sh
       - name: Add dprint to PATH
