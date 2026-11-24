@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -19,17 +20,7 @@ func NewAgentCmd() *cobra.Command {
 		Use: "skills", Short: "Access portable Agent Skills bundled with gh-kit", Args: cobra.NoArgs,
 		RunE: func(*cobra.Command, []string) error { return errors.New("a skills subcommand is required") },
 	}
-	skills.AddCommand(&cobra.Command{
-		Use: "list", Short: "List bundled Agent Skills", Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			for _, s := range bundled {
-				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", s.name, s.description); err != nil {
-					return fmt.Errorf("write skill list: %w", err)
-				}
-			}
-			return nil
-		},
-	}, &cobra.Command{
+	skills.AddCommand(newListCmd(), &cobra.Command{
 		Use: "get <name>", Short: "Print a bundled Agent Skill", Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, ok := findSkill(args[0])
@@ -41,7 +32,7 @@ func NewAgentCmd() *cobra.Command {
 			}
 			return nil
 		},
-	}, newManagementCmd(false), newManagementCmd(true))
+	}, newManagementCmd("install"), newManagementCmd("uninstall"), newManagementCmd("update"))
 	command.AddCommand(skills)
 	return command
 }
@@ -50,30 +41,38 @@ func unknownSkill(name string) error {
 	return fmt.Errorf("unknown bundled Agent Skill %q. Run 'gh kit agent skills list'", name)
 }
 
-func newManagementCmd(removing bool) *cobra.Command {
+func newManagementCmd(verb string) *cobra.Command {
+	removing := verb == "uninstall"
+	updating := verb == "update"
 	var all, project, dryRun, force, yes bool
 	var dir string
-	verb := "install"
 	short := "Install bundled Agent Skills into a .agents directory"
 	details := "Existing unmanaged files and symlinks are never overwritten, even with --force."
 	if removing {
-		verb = "uninstall"
 		short = "Remove skills managed by gh-kit from a .agents directory"
 		details = "Removes only unchanged managed files and preserves unrelated files.\nBulk removal requires --yes unless --dry-run is set. No interactive prompt is used."
+	}
+	if updating {
+		short = "Update installed skills managed by gh-kit"
+		details = "With no names, updates all managed bundled skills already installed.\nDoes not install missing or unmanaged skills. Local edits are preserved and must be resolved before updating."
+	}
+	example := "  gh kit agent skills " + verb + " gh-kit\n  gh kit agent skills " + verb + " --all --dry-run"
+	if updating {
+		example = "  gh kit agent skills update\n  gh kit agent skills update --dry-run\n  gh kit agent skills update gh-kit --project"
 	}
 	command := &cobra.Command{
 		Use: verb + " [names...]", Short: short,
 		Long:    short + ".\n\nDefaults to ~/.agents/skills. Use --project for the Git root's .agents directory\n(current directory outside Git), or --dir for another .agents root.\n" + details,
-		Example: "  gh kit agent skills " + verb + " gh-kit\n  gh kit agent skills " + verb + " --all --dry-run",
+		Example: example,
 		RunE: func(cmd *cobra.Command, names []string) error {
 			if project && cmd.Flags().Changed("dir") {
 				return errors.New("use either --project or --dir, not both")
 			}
-			if all == (len(names) != 0) {
+			if all && len(names) != 0 || !updating && !all && len(names) == 0 {
 				return errors.New("specify one or more skill names, or --all, but not both")
 			}
 			var selected []skill
-			if all {
+			if all || updating && len(names) == 0 {
 				selected = bundled
 			} else {
 				seen := make(map[string]bool)
@@ -95,10 +94,21 @@ func newManagementCmd(removing bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			completed, operationErr := manage(selected, root, removing, dryRun, force, diskOperations())
+			var completed []string
+			var operationErr error
+			if updating {
+				completed, operationErr = update(selected, root, dryRun, diskOperations())
+			} else {
+				completed, operationErr = manage(selected, root, removing, dryRun, force, diskOperations())
+			}
 			for _, result := range completed {
 				if _, err := fmt.Fprintln(cmd.OutOrStdout(), result); err != nil {
 					return errors.Join(operationErr, fmt.Errorf("write skill outcome: %w", err))
+				}
+			}
+			if len(completed) > 0 || operationErr == nil {
+				if _, err := fmt.Fprintln(cmd.OutOrStdout(), outcomeSummary(completed)); err != nil {
+					return errors.Join(operationErr, fmt.Errorf("write skill summary: %w", err))
 				}
 			}
 			return operationErr
@@ -106,13 +116,63 @@ func newManagementCmd(removing bool) *cobra.Command {
 	}
 	command.Flags().BoolVar(&all, "all", false, "Select all bundled skills instead of named skills")
 	command.Flags().StringVar(&dir, "dir", "", "Root of the .agents installation (skills are stored under DIR/skills)")
-	command.Flags().BoolVar(&project, "project", false, "Use the Git root's .agents directory (current directory outside Git)")
+	command.Flags().BoolVar(&project, "project", false, "Use the Git root's .agents directory (current directory outside Git). Conflicts with --dir")
 	command.Flags().BoolVar(&dryRun, "dry-run", false, "Preview changes without writing or removing files")
 	if removing {
 		command.Flags().BoolVarP(&yes, "yes", "y", false, "Approve uninstalling all bundled skills")
-	} else {
+	} else if !updating {
 		command.Flags().BoolVar(&force, "force", false, "Overwrite differing SKILL.md files only when managed by gh-kit")
 	}
+	return command
+}
+
+func newListCmd() *cobra.Command {
+	var project bool
+	var dir string
+	command := &cobra.Command{
+		Use: "list", Short: "List bundled Agent Skills with installation status and paths", Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if project && cmd.Flags().Changed("dir") {
+				return errors.New("use either --project or --dir, not both")
+			}
+			root, err := installationRoot(dir, cmd.Flags().Changed("dir"), project)
+			if err != nil {
+				return err
+			}
+			installations, err := inspectInstallations(bundled, root, diskOperations())
+			if err != nil {
+				return err
+			}
+			for _, item := range installations {
+				state := item.inspection.state
+				status := "not installed"
+				switch {
+				case state.Content == nil && state.Receipt != nil:
+					status = "missing"
+				case state.Content != nil && state.Receipt == nil:
+					status = "unmanaged"
+				case state.Content != nil:
+					switch {
+					case !reflect.DeepEqual(state.Content, state.Receipt.Content):
+						status = "modified"
+					case !reflect.DeepEqual(state.Content, []byte(item.skill.content)):
+						status = "update available"
+					default:
+						status = "installed"
+					}
+				}
+				if item.inspection.pending != nil {
+					status += " (pending recovery)"
+				}
+				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\n", item.skill.name, status, item.store.file(), item.skill.description); err != nil {
+					return fmt.Errorf("write skill list: %w", err)
+				}
+			}
+			return nil
+		},
+	}
+	command.Flags().StringVar(&dir, "dir", "", "Root of the .agents installation (skills are stored under DIR/skills)")
+	command.Flags().BoolVar(&project, "project", false, "Use the Git root's .agents directory (current directory outside Git). Conflicts with --dir")
 	return command
 }
 

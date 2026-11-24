@@ -32,6 +32,10 @@ func (r *telemetryTransport) RoundTrip(req *http.Request) (*http.Response, error
 }
 
 func TestRunTelemetry(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Chdir(t.TempDir())
 	for _, tc := range []struct {
 		name            string
 		args            []string
@@ -87,6 +91,7 @@ func TestCommandHelp(t *testing.T) {
 		{"agent", "--help"}, {"agent", "skills", "--help"},
 		{"agent", "skills", "list", "--help"}, {"agent", "skills", "get", "--help"},
 		{"agent", "skills", "install", "--help"}, {"agent", "skills", "uninstall", "--help"},
+		{"agent", "skills", "update", "--help"},
 	} {
 		var out, stderr bytes.Buffer
 		if err := run(context.Background(), args, &out, &stderr); err != nil {
@@ -141,6 +146,10 @@ func TestWorkflowLogsHelp(t *testing.T) {
 }
 
 func TestAgentSkillsCommands(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Chdir(t.TempDir())
 	for _, args := range [][]string{
 		{"agent", "skills", "list"},
 		{"agent", "skills", "get", "gh-kit"},
@@ -166,6 +175,10 @@ func TestAgentSkillsInvalidArguments(t *testing.T) {
 		{"skills", "uninstall"}, {"skills", "uninstall", "--all"},
 		{"skills", "uninstall", "gh-kit", "--force"},
 		{"skills", "uninstall", "gh-kit", "--project", "--dir", ".agents"},
+		{"skills", "update", "--all", "gh-kit"}, {"skills", "update", "unknown"},
+		{"skills", "update", "gh-kit", "--force"}, {"skills", "update", "--yes"},
+		{"skills", "update", "--project", "--dir", ".agents"},
+		{"skills", "list", "--project", "--dir", ".agents"},
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			var out, stderr bytes.Buffer
@@ -197,7 +210,7 @@ func TestInvalidFlagsShowHelp(t *testing.T) {
 		{}, {"workflows"}, {"workflows", "cancel-all"}, {"workflows", "logs"}, {"workflows", "rerun"},
 		{"pr"}, {"pr", "comments"}, {"agent"}, {"agent", "skills"},
 		{"agent", "skills", "list"}, {"agent", "skills", "get"},
-		{"agent", "skills", "install"}, {"agent", "skills", "uninstall"},
+		{"agent", "skills", "install"}, {"agent", "skills", "uninstall"}, {"agent", "skills", "update"},
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			var out, stderr bytes.Buffer
