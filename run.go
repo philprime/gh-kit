@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 
 	"github.com/philprime/gh-kit/cmd"
@@ -15,7 +16,12 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	root.SetOut(stdout)
 	root.SetErr(stderr)
 	instrumentCommands(root)
-	return root.ExecuteContext(ctx)
+	command, err := root.ExecuteContextC(ctx)
+	if err != nil {
+		command.SetOut(stderr)
+		return errors.Join(err, command.Help())
+	}
+	return nil
 }
 
 func instrumentCommands(command *cobra.Command) {
